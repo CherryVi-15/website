@@ -49,10 +49,10 @@ export async function razorpay(path,payload){
  return response.json()
 }
 export async function markCaptured(payment){
- if(payment?.status!=='captured'||payment.currency!=='INR')return false
+ if(payment?.status!=='captured'||payment.currency!=='INR')return null
  const sql=database()
  const rows=await sql`update izih.orders set payment_status='paid',gateway_payment=${payment.id},paid_at=coalesce(paid_at,now())
  where gateway_order=${payment.order_id} and total=${payment.amount}
  and (gateway_payment is null or gateway_payment=${payment.id}) returning id`
- return rows.length===1
+ return rows[0]?.id ?? null
 }

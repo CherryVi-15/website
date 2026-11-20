@@ -9,5 +9,5 @@ export const POST=endpoint(async request=>{
  if(!record||!signed(record.gateway_order+'|'+payment,signature,gatewayKeys().secret))throw new Problem(400,'Payment signature could not be verified.')
  const captured=await razorpay('payments/'+payment)
  if(captured.id!==payment||captured.order_id!==record.gateway_order||captured.amount!==record.total)throw new Problem(400,'Payment does not match the order.')
- return {paid:await markCaptured(captured)}
+ return {paid:Boolean(await markCaptured(captured))}
 })

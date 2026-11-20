@@ -1,4 +1,3 @@
-import {customer} from '../server/auth.mjs'
 import {body,database,endpoint,gatewayKeys,hash,json,Problem,razorpay} from '../server/core.mjs'
 
 const products=new Set(['karak','sufi','zinty','koka','hazelnut','vanilla','caff','esra'])
@@ -28,16 +27,15 @@ export function validateOrder(input){
 
 export const POST=endpoint(async request=>{
  const order=validateOrder(json(await body(request)))
- const customerId=await customer(request,{optional:true})
  const sql=database()
  const fingerprint=hash(order)
  await sql.begin(async tx=>{
-  const inserted=await tx`insert into izih.orders (id,request_hash,shipping,subtotal,delivery,customer_id)
-  values (${order.id},${fingerprint},${tx.json(order.shipping)},${order.subtotal},2000,${customerId})
+  const inserted=await tx`insert into izih.orders (id,request_hash,shipping,subtotal,delivery)
+  values (${order.id},${fingerprint},${tx.json(order.shipping)},${order.subtotal},2000)
   on conflict(id) do nothing returning id`
   if(!inserted.length){
-   const [existing]=await tx`select request_hash,customer_id from izih.orders where id=${order.id}`
-   if(existing?.request_hash!==fingerprint||existing?.customer_id!==customerId)throw new Problem(409,'Cart or account changed. Start checkout again.')
+   const [existing]=await tx`select request_hash from izih.orders where id=${order.id}`
+   if(existing?.request_hash!==fingerprint)throw new Problem(409,'Cart details changed. Start checkout again.')
   }
   if(inserted.length){
    const rows=order.items.map(item=>({order_id:order.id,...item}))

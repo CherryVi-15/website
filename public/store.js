@@ -73,7 +73,7 @@ function cartView(){
 function checkout(){
  if(!cart.length)return cartView()
  const fields=[['name','Full name','name','text'],['email','Email','email','email'],['phone','Phone','tel','tel'],['address','Street address','street-address','text'],['city','City','off','text','Indore'],['state','State','off','text','Madhya Pradesh'],['pin','PIN code','postal-code','text']]
- return `<section class="checkout-banner"><div class="wrap"><div><h1>Checkout</h1><p>Where should we bring your cups?</p></div>${cat('tea','checkout-cat')}</div></section><section class="wrap section cart-layout checkout-layout"><form class="panel form" id="shipping"><h2>Shipping details</h2>${fields.map(([id,label,auto,type,fixed])=>`<label>${label}<input name="${id}" type="${type}" autocomplete="${auto}" ${fixed?'readonly value="'+fixed+'"':''} ${id==='pin'?'inputmode="numeric" pattern="[0-9]{6}" maxlength="6"':''} required></label>`).join('')}<p class="small" id="shipping-pin-status" role="status"></p><div class="checkout-actions">${button('Back to cart','cart')}<button class="btn" type="submit">Pay now</button></div></form><div class="panel"><h3>Order summary</h3>${totals()}</div></section>`
+ return `<section class="checkout-banner"><div class="wrap"><div><h1>Checkout</h1><p>Where should we bring your cups?</p></div>${cat('tea','checkout-cat')}</div></section><section class="wrap section cart-layout checkout-layout"><form class="panel form" id="shipping"><h2>Shipping details</h2><p class="small guest-checkout-note">Guest checkout. We’ll send your order confirmation to this email after payment.</p>${fields.map(([id,label,auto,type,fixed])=>`<label>${label}<input name="${id}" type="${type}" autocomplete="${auto}" ${fixed?'readonly value="'+fixed+'"':''} ${id==='pin'?'inputmode="numeric" pattern="[0-9]{6}" maxlength="6"':''} required></label>`).join('')}<p class="small" id="shipping-pin-status" role="status"></p><div class="checkout-actions">${button('Back to cart','cart')}<button class="btn" type="submit">Pay now</button></div></form><div class="panel"><h3>Order summary</h3>${totals()}</div></section>`
 }
 const payment=()=>heading('Payment')+`<section class="wrap section narrow"><div class="panel"><h3>${paymentConfirmed?'Payment confirmed':'Payment status pending'}</h3><p role="status">${paymentMessage}</p>${button(paymentConfirmed?'Back to shop':'Back to checkout',paymentConfirmed?'shop':'checkout')}</div></section>`
 const about=()=>heading('About IZIH')+`<section class="wrap section split story-typography">${img('story','IZIH instant tea collection','story-img')}<div><p class="eyebrow">The story behind IZIH</p><h2>Do less. Live more.</h2><p>Izih is my cat. I love her, and her name has always meant something special to me. She’s taught me to do less, live more, and let a little stress go.</p><p>I love a cup of tea, but making it and washing the utensils several times a day felt like a chore. Some days I’d skip the cup altogether. I wanted something easy that would save me time and still let me enjoy my tea. That’s how IZIH came to life.</p><p>This brand will always have a place in my heart. It’s dedicated to Izih, my lovely, lazy black cat.</p>${cat('tea','cart-cat')}${button('Explore the flavors','shop')}</div></section>`
@@ -86,21 +86,17 @@ const faqs=()=>heading('FAQs')+`<section class="wrap section narrow faq">${[
  ['Where can I find the refund policy?','See the Refund & Policies page for its current status.']
  ].map(([q,a])=>'<details><summary>'+q+'</summary><p>'+a+'</p></details>').join('')}</section>`
 const policy=()=>heading('Refund &amp; Policies')+`<section class="wrap section narrow"><div class="panel"><h3>Policy details pending</h3><p style="margin-top:1rem">Published refund, cancellation, delivery and privacy terms are pending. This preview does not place orders or charge customers.</p>${button('Contact IZIH','contact')}</div></section>`
-const support=(title,text)=>heading(title)+`<section class="wrap section narrow"><div class="panel"><h3>Service connection needed</h3><p style="margin-top:1rem">${text}</p>${button('Back to shop','shop')}</div></section>`
 const missing=()=>heading('Page unavailable')+`<section class="wrap section">${button('Back to home','home')}</section>`
 function render(reset=true){
  const [route='home',a,b]=(location.hash.slice(1)||'home').split('/')
- const views={home,shop:()=>shop(a,b),product:()=>product(find(a)),search,cart:cartView,checkout,payment,about,contact,faqs,policies:policy,account:accountView,orders:ordersView,tracking:()=>support('Tracking','Shipment tracking requires a connected delivery service.')}
+ const views={home,shop:()=>shop(a,b),product:()=>product(find(a)),search,cart:cartView,checkout,payment,about,contact,faqs,policies:policy}
  main.innerHTML=(Object.hasOwn(views,route)?views[route]:missing)()+pinDialog
  document.querySelectorAll('nav a').forEach(link=>{if(link.hash==='#'+(route==='product'?'shop':route))link.setAttribute('aria-current','page');else link.removeAttribute('aria-current')})
- document.querySelector('.menu').open=false
- if(route==='orders')loadCustomerOrders()
  if(route==='search')searchResults('')
  if(route==='checkout'){const form=document.querySelector('#shipping');if(form){form.elements.namedItem('pin').value=lastPin;if(shipping)for(const [name,value] of Object.entries(shipping))form.elements.namedItem(name).value=value}}
  if(reset){main.focus({preventScroll:true});window.scrollTo(0,0)}
 }
 document.querySelector('.skip').addEventListener('click',event=>{event.preventDefault();main.focus();main.scrollIntoView()})
-document.querySelector('.dropdown').addEventListener('click',()=>{document.querySelector('.menu').open=false})
 window.addEventListener('hashchange',()=>render())
 main.addEventListener('click',event=>{
  if(event.target.closest('[data-close-pin]')){pendingPack=null;document.querySelector('.pin-dialog').close();return}
@@ -151,8 +147,8 @@ main.addEventListener('submit',event=>{
 let checkoutAttempt
 let paymentConfirmed=false
 let paymentMessage='Return to checkout to start a payment.'
-async function postCheckout(path,payload,token){
- const response=await fetch('/api/'+path,{method:'POST',headers:{'Content-Type':'application/json',...(token?{Authorization:'Bearer '+token}:{})},body:JSON.stringify(payload)})
+async function postCheckout(path,payload){
+ const response=await fetch('/api/'+path,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)})
  const data=await response.json().catch(()=>null)
  if(response.status===404||response.status===405||!data)throw new Error('The checkout API is unavailable. Check that Vercel deployed the api/ folder.')
  if(!response.ok)throw new Error(data.error||'Checkout is temporarily unavailable.')
@@ -195,7 +191,7 @@ async function startCheckout(form,data){
  lastPin=pin
  shipping={...Object.fromEntries(data),city:'Indore',state:'Madhya Pradesh'}
  const items=cart.map(({id,pack,qty})=>({id,pack,qty}))
- const fingerprint=JSON.stringify({shipping,items,customer:accountSession?.id})
+ const fingerprint=JSON.stringify({shipping,items})
  if(checkoutAttempt?.fingerprint!==fingerprint)checkoutAttempt={id:crypto.randomUUID(),fingerprint}
  const id=checkoutAttempt.id
  const pay=form.querySelector('button[type=submit],button:not([type])')
@@ -204,7 +200,7 @@ async function startCheckout(form,data){
  output.textContent='Preparing your order…'
  const unlock=()=>{pay.disabled=false}
  try{
-  const order=await postCheckout('orders',{id,shipping,items},await accountToken())
+  const order=await postCheckout('orders',{id,shipping,items})
   if(order.paid){paymentResult(id,true);unlock();return}
   if(location.hash!=='#checkout'||!form.isConnected){unlock();return}
   const Razorpay=await loadRazorpay()
@@ -226,108 +222,5 @@ async function startCheckout(form,data){
  }catch(error){unlock();output.textContent=error.message}
 }
 
-const accountSessionKey='izih-account-v1'
-let accountSession
-let configPromise
-let refreshPromise
-try{accountSession=JSON.parse(sessionStorage.getItem(accountSessionKey))}catch{}
-function saveAccount(session){
- accountSession=session
- try{if(session)sessionStorage.setItem(accountSessionKey,JSON.stringify(session));else sessionStorage.removeItem(accountSessionKey)}catch{}
-}
-function accountConfig(){
- return configPromise ??= fetch('/api/account-config',{cache:'no-store'}).then(async response=>{
-  if(!response.ok)throw new Error('Customer accounts are awaiting setup.')
-  return response.json()
- }).catch(error=>{configPromise=null;throw error})
-}
-async function authRequest(route,payload,method='POST',token){
- const {url,key}=await accountConfig()
- const headers={apikey:key,'Content-Type':'application/json'}
- if(token)headers.Authorization='Bearer '+token
- const response=await fetch(url+'/auth/v1/'+route,{method,headers,body:payload?JSON.stringify(payload):undefined})
- const result=await response.json().catch(()=>null)
- if(!response.ok)throw new Error(result?.msg||result?.message||result?.error_description||'Account request failed.')
- return result
-}
-function saveTokens(data){
- saveAccount({access_token:data.access_token,refresh_token:data.refresh_token,expires_at:Math.floor(Date.now()/1000)+data.expires_in,id:data.user.id})
-}
-async function accountToken(){
- if(!accountSession)return null
- if(accountSession.expires_at>Date.now()/1000+45)return accountSession.access_token
- return refreshPromise ??= authRequest('token?grant_type=refresh_token',{refresh_token:accountSession.refresh_token}).then(data=>{
-  if(!accountSession)return null
-  saveTokens(data)
-  return accountSession.access_token
- }).catch(()=>{saveAccount(null);throw new Error('Your session expired. Please sign in again.')}).finally(()=>{refreshPromise=null})
-}
-const accountView=()=>heading('Your account')+`<section class="wrap section narrow"><div class="panel">${accountSession?`<h3>You’re signed in</h3><div class="checkout-actions">${button('View my orders','orders')}<button class="pill" type="button" data-sign-out>Sign out</button></div>`:`<form id="account-form" class="form"><label>Email<input type="email" name="email" autocomplete="email" required></label><label>Password<input type="password" name="password" autocomplete="current-password" minlength="8" required></label><div class="checkout-actions"><button class="btn" name="action" value="signin">Sign in</button><button class="pill" name="action" value="signup">Create account</button><button class="text-button" name="action" value="resend" formnovalidate>Resend confirmation email</button></div></form>`}<p role="status" id="account-status"></p></div></section>`
-const ordersView=()=>heading('Your orders')+`<section class="wrap section narrow"><div class="panel" id="account-orders">${accountSession?'<p role="status">Loading your orders…</p>':'<p>Sign in to view orders placed with your account.</p>'+button('Sign in','account')}</div></section>`
-main.addEventListener('submit',async event=>{
- if(event.target.id!=='account-form')return
- event.preventDefault()
- const form=event.target
- const status=document.querySelector('#account-status')
- if(form.dataset.busy)return
- const resend=event.submitter?.value==='resend'
- if(resend&&!form.elements.namedItem('email').reportValidity())return
- form.dataset.busy='true'
- const fields=new FormData(form)
- const payload={email:fields.get('email'),password:fields.get('password')}
- const signup=event.submitter?.value==='signup'
- status.textContent=resend?'Sending confirmation email…':signup?'Creating your account…':'Signing in…'
- try{
-  const redirect=encodeURIComponent(location.origin+'/')
-  if(resend){
-   await authRequest('resend?redirect_to='+redirect,{type:'signup',email:payload.email})
-   status.textContent='If this address still needs confirmation, look for a new email and use its latest link.'
-   return
-  }
-  const route=signup?'signup?redirect_to='+redirect:'token?grant_type=password'
-  const data=await authRequest(route,payload)
-  if(data.access_token){saveTokens(data);if(location.hash==='#account')render(false)}
-  else{form.reset();status.textContent='Check your email to confirm your account, then return here to sign in.'}
- }catch(error){status.textContent=error.message}
- finally{delete form.dataset.busy}
-})
-main.addEventListener('click',async event=>{
- if(!event.target.closest('[data-sign-out]'))return
- const token=accountSession?.access_token
- saveAccount(null)
- render(false)
- if(token)try{await authRequest('logout?scope=local',null,'POST',token)}catch{}
-})
-async function loadCustomerOrders(){
- const panel=document.querySelector('#account-orders')
- if(!panel||!accountSession)return
- const add=(parent,tag,value)=>{const el=document.createElement(tag);el.textContent=value;parent.append(el);return el}
- try{
-  const token=await accountToken()
-  const response=await fetch('/api/order-history',{headers:{Authorization:'Bearer '+token},cache:'no-store'})
-  if(response.status===401){saveAccount(null);if(panel.isConnected)render(false);return}
-  const data=await response.json()
-  if(!response.ok)throw new Error(data.error||'Could not load your orders.')
-  panel.replaceChildren()
-  if(!data.orders.length){add(panel,'p','You have no orders linked to this account yet.');return}
-  for(const order of data.orders){
-   const entry=add(panel,'article','')
-   entry.className='customer-order'
-   add(entry,'h3',new Date(order.created_at).toLocaleDateString('en-IN',{dateStyle:'medium',timeZone:'Asia/Kolkata'}))
-   add(entry,'p','Order '+order.id)
-   add(entry,'p',(order.payment_status==='paid'?'Paid':'Pending payment')+' · '+money.format(order.total/100)+' · '+order.fulfillment_status)
-   const items=add(entry,'ul','')
-   for(const item of order.items)add(items,'li',(find(item.flavor)?.name||item.flavor)+' · Pack of '+item.pack+' × '+item.quantity+' · '+money.format(item.unit_price*item.quantity/100))
-  }
- }catch(error){panel.textContent=error.message}
-}
-const authRedirect=new URLSearchParams(location.hash.slice(1))
-const authError=authRedirect.get('error_code')
-const confirmed=authRedirect.has('access_token')&&['signup','email'].includes(authRedirect.get('type'))
-if(authError||authRedirect.has('access_token')){
- history.replaceState(null,'',location.pathname+'#account')
-}
+try{sessionStorage.removeItem('izih-account-v1')}catch{}
 render(false)
-const authStatus=document.querySelector('#account-status')
-if(authStatus&&authError)authStatus.textContent=authError==='otp_expired'?'This confirmation link has expired or has already been used. If you still can’t sign in, request a new email below.':'Email confirmation could not be completed. Request a new confirmation email and try again.'
-if(authStatus&&confirmed)authStatus.textContent='Email confirmed. Sign in with your email and password.'
