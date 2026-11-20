@@ -262,7 +262,7 @@ async function accountToken(){
   return accountSession.access_token
  }).catch(()=>{saveAccount(null);throw new Error('Your session expired. Please sign in again.')}).finally(()=>{refreshPromise=null})
 }
-const accountView=()=>heading('Your account')+`<section class="wrap section narrow"><div class="panel">${accountSession?`<h3>You’re signed in</h3><div class="checkout-actions">${button('View my orders','orders')}<button class="pill" type="button" data-sign-out>Sign out</button></div>`:`<form id="account-form" class="form"><label>Email<input type="email" name="email" autocomplete="email" required></label><label>Password<input type="password" name="password" autocomplete="current-password" minlength="8" required></label><div class="checkout-actions"><button class="btn" name="action" value="signin">Sign in</button><button class="pill" name="action" value="signup">Create account</button></div></form>`}<p role="status" id="account-status"></p></div></section>`
+const accountView=()=>heading('Your account')+`<section class="wrap section narrow"><div class="panel">${accountSession?`<h3>You’re signed in</h3><div class="checkout-actions">${button('View my orders','orders')}<button class="pill" type="button" data-sign-out>Sign out</button></div>`:`<form id="account-form" class="form"><label>Email<input type="email" name="email" autocomplete="email" required></label><label>Password<input type="password" name="password" autocomplete="current-password" minlength="8" required></label><div class="checkout-actions"><button class="btn" name="action" value="signin">Sign in</button><button class="pill" name="action" value="signup">Create account</button><button class="text-button" name="action" value="resend" formnovalidate>Resend confirmation email</button></div></form>`}<p role="status" id="account-status"></p></div></section>`
 const ordersView=()=>heading('Your orders')+`<section class="wrap section narrow"><div class="panel" id="account-orders">${accountSession?'<p role="status">Loading your orders…</p>':'<p>Sign in to view orders placed with your account.</p>'+button('Sign in','account')}</div></section>`
 main.addEventListener('submit',async event=>{
  if(event.target.id!=='account-form')return
@@ -270,13 +270,21 @@ main.addEventListener('submit',async event=>{
  const form=event.target
  const status=document.querySelector('#account-status')
  if(form.dataset.busy)return
+ const resend=event.submitter?.value==='resend'
+ if(resend&&!form.elements.namedItem('email').reportValidity())return
  form.dataset.busy='true'
  const fields=new FormData(form)
  const payload={email:fields.get('email'),password:fields.get('password')}
  const signup=event.submitter?.value==='signup'
- status.textContent=signup?'Creating your account…':'Signing in…'
+ status.textContent=resend?'Sending confirmation email…':signup?'Creating your account…':'Signing in…'
  try{
-  const route=signup?'signup?redirect_to='+encodeURIComponent(location.origin+'/'):'token?grant_type=password'
+  const redirect=encodeURIComponent(location.origin+'/')
+  if(resend){
+   await authRequest('resend?redirect_to='+redirect,{type:'signup',email:payload.email})
+   status.textContent='If this address still needs confirmation, look for a new email and use its latest link.'
+   return
+  }
+  const route=signup?'signup?redirect_to='+redirect:'token?grant_type=password'
   const data=await authRequest(route,payload)
   if(data.access_token){saveTokens(data);if(location.hash==='#account')render(false)}
   else{form.reset();status.textContent='Check your email to confirm your account, then return here to sign in.'}
@@ -313,8 +321,13 @@ async function loadCustomerOrders(){
   }
  }catch(error){panel.textContent=error.message}
 }
-if(new URLSearchParams(location.hash.slice(1)).has('access_token')||new URLSearchParams(location.hash.slice(1)).has('error_code')){
+const authRedirect=new URLSearchParams(location.hash.slice(1))
+const authError=authRedirect.get('error_code')
+const confirmed=authRedirect.has('access_token')&&['signup','email'].includes(authRedirect.get('type'))
+if(authError||authRedirect.has('access_token')){
  history.replaceState(null,'',location.pathname+'#account')
 }
-
 render(false)
+const authStatus=document.querySelector('#account-status')
+if(authStatus&&authError)authStatus.textContent=authError==='otp_expired'?'This confirmation link has expired or has already been used. If you still can’t sign in, request a new email below.':'Email confirmation could not be completed. Request a new confirmation email and try again.'
+if(authStatus&&confirmed)authStatus.textContent='Email confirmed. Sign in with your email and password.'
